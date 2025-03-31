@@ -19,8 +19,14 @@ const activeVoices = {};
 const masterGain = mySynthCtx.createGain();
 masterGain.gain.value = 0.125; // Set master volume
 
+//add in a filter
+const lpFilter = mySynthCtx.createBiquadFilter();
+lpFilter.type = "lowpass";
+lpFilter.frequency.value = 500;
+
 // Connect master gain to the audio output
-masterGain.connect(mySynthCtx.destination);
+masterGain.connect(lpFilter);
+lpFilter.connect(mySynthCtx.destination);
 
 /**
  * @function mtof
@@ -37,13 +43,13 @@ const mtof = function (midi) {
  * @description Starts a note by creating and storing a new Voice instance.
  * @param {number} note - The MIDI note number.
  */
-const startNote = function (note) {
+const startNote = function (note, velocity) {
   if (!activeVoices[note]) {
     let someVoice = new Voice(
-      mySynthCtx,
-      mtof(note),
-      Math.random(),
-      masterGain
+      mySynthCtx, //the audio context
+      mtof(note), //the frequency
+      velocity / 127, //maximum amplitude
+      masterGain //output audio node
     );
     activeVoices[note] = someVoice;
     activeVoices[note].start(); //someVoice.start()
@@ -66,30 +72,60 @@ const stopNote = function (note) {
 
 const midiParser = function (midiEvent) {
   let statusByte = midiEvent.data[0];
+  let dataByte1 = midiEvent.data[1];
+  let dataByte2 = midiEvent.data[2];
   let command = statusByte & 0xf0;
   let channel = statusByte & 0x0f;
 
   switch (command) {
-    case 0x80: //note off
+    //----------------------Note Off Message---------------------------
+    case 0x80:
       console.log("note off");
-      stopNote(midiEvent.data[1]);
+      stopNote(dataByte1);
       break;
-    case 0x90: //note On
-      console.log("noteon", midiEvent.data[1], midiEvent.data[2]);
-      if (midiEvent.data[2] > 0) {
-        startNote(midiEvent.data[1]);
+    //----------------------Note On Message---------------------------
+    case 0x90:
+      console.log("note on");
+      //test the velocity to see if is postive, in the case the MIDI controller
+      //sends note on messages with 0 velocity instead of note off
+      if (dataByte2 > 0) {
+        startNote(dataByte1, dataByte2);
       } else {
-        stopNote(midiEvent.data[1]);
+        stopNote(dataByte1);
       }
       break;
+    //----------------------Polyphonic Aftertouch---------------------------
+    case 0xa0:
+      console.log("Polyphonic Aftertouch");
+      break;
+    //----------------------Control Change---------------------------
     case 0xb0:
-      console.log("CC DATa");
-  }
+      // console.log("Control Change", dataByte1, dataByte2);
+      if (dataByte1 == 79) {
+        masterGain.gain.linearRampToValueAtTime(
+          Math.pow(dataByte2 / 127, 3),
+          mySynthCtx.currentTime + 0.01
+        );
+      } else if (dataByte1 == 78) {
+        lpFilter.frequency.value = dataByte2 * 10;
+        lpFilter.Q.value = (dataByte2 / 127) * 30;
+      }
 
-  // if (command == 0x90) {
-  //   console.log("noteon", midiEvent.data[1], midiEvent.data[2]);
-  //   startNote(midiEvent.data[1]);
-  // }
+      break;
+    //----------------------Program Change---------------------------
+    case 0xc0:
+      console.log("Program Change");
+      break;
+    //----------------------Channel Aftertouch	---------------------------
+    case 0xd0:
+      console.log("Channel Aftertouch	");
+
+      break;
+    //----------------------Pitch Bend---------------------------
+    case 0xe0:
+      console.log("Pitch Bend");
+      break;
+  }
 };
 
 const onMIDIsuccess = function (midiAccess) {
