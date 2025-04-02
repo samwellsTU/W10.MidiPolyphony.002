@@ -70,6 +70,31 @@ const stopNote = function (note) {
   }
 };
 
+const ccMIDI = function (ccNum, ccVal) {
+  switch (ccNum) {
+    case 79:
+      masterGain.gain.linearRampToValueAtTime(
+        Math.pow(ccVal / 127, 3),
+        mySynthCtx.currentTime + 0.01
+      );
+      break;
+    case 78:
+      lpFilter.frequency.value = ccVal * 10;
+      break;
+    case 77:
+      lpFilter.Q.value = (ccVal / 127) * 30;
+      break;
+  }
+
+  // if (ccNum == 79) {
+  //
+  //   );
+  // } else if (ccNum == 78) {
+  //   lpFilter.frequency.value = ccNum * 100;
+  //   lpFilter.Q.value = (ccVal / 127) * 30;
+  // }
+};
+
 const midiParser = function (midiEvent) {
   let statusByte = midiEvent.data[0];
   let dataByte1 = midiEvent.data[1];
@@ -101,16 +126,7 @@ const midiParser = function (midiEvent) {
     //----------------------Control Change---------------------------
     case 0xb0:
       // console.log("Control Change", dataByte1, dataByte2);
-      if (dataByte1 == 79) {
-        masterGain.gain.linearRampToValueAtTime(
-          Math.pow(dataByte2 / 127, 3),
-          mySynthCtx.currentTime + 0.01
-        );
-      } else if (dataByte1 == 78) {
-        lpFilter.frequency.value = dataByte2 * 10;
-        lpFilter.Q.value = (dataByte2 / 127) * 30;
-      }
-
+      ccMIDI(dataByte1, dataByte2);
       break;
     //----------------------Program Change---------------------------
     case 0xc0:
